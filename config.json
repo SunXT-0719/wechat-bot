@@ -1,0 +1,27 @@
+{
+    "_comment": "微信机器人配置文件 - WeChat Bot Configuration",
+
+    "backend": "weflow",
+    "backend_comment": "可选: 'wxauto' (仅支持微信3.9.x) 或 'weflow' (推荐，支持当前版本微信)",
+
+    "bot_nicknames": ["机器人", "Bot"],
+    "command_prefix": "/",
+    "poll_interval_seconds": 2,
+    "debug": true,
+
+    "weflow_base_url": "http://127.0.0.1:5031",
+    "weflow_access_token": "你的WeFlow_Access_Token",
+
+    "groups_whitelist": [],
+    "groups_blacklist": [],
+
+    "respond_to_all_commands_in_groups": true,
+    "require_mention_for_commands": false,
+
+    "log_file": "bot.log",
+    "log_level": "DEBUG",
+
+    "deepseek_api_key": "你的DeepSeek_API_Key",
+    "deepseek_model": "deepseek-chat",
+    "deepseek_base_url": "https://api.deepseek.com/v1/chat/completions"
+}

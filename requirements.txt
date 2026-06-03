@@ -1,0 +1,14 @@
+# wxauto backend (WeChat 3.9.x only)
+wxauto>=3.9
+uiautomation
+
+# WeFlow backend (any WeChat version)
+pyautogui>=0.9.54
+pygetwindow>=0.0.9
+
+# Both backends
+pyperclip
+requests>=2.31.0
+
+# Windows API (for wxauto backend)
+pywin32

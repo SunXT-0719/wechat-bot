@@ -1,0 +1,22 @@
+# Logs
+*.log
+
+# Message history (may contain sensitive chat data)
+message_history.jsonl
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Config with real API keys (copy config.json to config.local.json for local use)
+config.local.json
+
+# Silent confirm flag
+.no_confirm
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

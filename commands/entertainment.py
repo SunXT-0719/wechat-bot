@@ -14,7 +14,7 @@ import secrets
 from collections import defaultdict
 
 from bot.command_handler import CommandContext, get_registry
-from bot.deepseek_client import call_deepseek, call_deepseek_messages, search_web
+from bot.deepseek_client import call_deepseek, call_deepseek_messages
 from bot.message_store import get_message_store
 
 logger = logging.getLogger(__name__)
@@ -156,21 +156,15 @@ def _register() -> None:
     # ---- /chat --------------------------------------------------------
     @r.register(
         "chat",
-        description="与 AI 聊天（-s 启用联网搜索）",
-        usage="/chat [-s] <消息内容>",
+        description="与 AI 聊天（按群独立上下文）",
+        usage="/chat <消息内容>",
     )
     def cmd_chat(args: list[str], ctx: CommandContext) -> str | None:
         if not args:
             return "用法: /chat [-s] <消息内容>\n例如: /chat -s 今天上海天气怎么样"
 
-        # 解析 -s 标志
-        use_search = False
-        if args[0] == "-s":
-            use_search = True
-            args = args[1:]
-
         if not args:
-            return "用法: /chat [-s] <消息内容>"
+            return "用法: /chat <消息内容>"
 
         user_msg = " ".join(args)
         chat_id = ctx.chat_name  # 按群聊隔离上下文
@@ -178,17 +172,6 @@ def _register() -> None:
         bot = ctx.extra.get("bot")
         if bot is None:
             return "❌ 内部错误：无法获取 bot 配置"
-
-        # 联网搜索
-        search_context = ""
-        if use_search:
-            logger.info(f"[chat-search] 搜索: {user_msg[:80]}")
-            search_context = (
-                "\n\n【以下是最新的联网搜索结果，你的知识已过时，"
-                "必须以此为准回答问题。如果搜索结果与你的训练数据冲突，"
-                "以搜索结果为准。】\n"
-                + search_web(user_msg)
-            )
 
         # 在消息前加上发送者名字
         user_msg_with_sender = f"{ctx.sender}: {user_msg}"
@@ -199,7 +182,7 @@ def _register() -> None:
         ]
         history = _chat_histories[chat_id]
         messages.extend(history[-_MAX_CHAT_HISTORY * 2:])
-        messages.append({"role": "user", "content": user_msg_with_sender + search_context})
+        messages.append({"role": "user", "content": user_msg_with_sender})
 
         logger.info(
             f"[chat] {ctx.sender}@{chat_id}: {user_msg[:80]} "

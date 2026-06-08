@@ -22,6 +22,6 @@
     "log_level": "DEBUG",
 
     "deepseek_api_key": "你的DeepSeek_API_Key",
-    "deepseek_model": "deepseek-chat",
+    "deepseek_model": "deepseek-v4-flash",
     "deepseek_base_url": "https://api.deepseek.com/v1/chat/completions"
 }

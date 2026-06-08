@@ -79,6 +79,10 @@ class WeChatBot:
         logger.info(f"   已注册命令: {len(self.commands.commands)} 个")
         logger.info("=" * 50)
 
+        # 首次启动时发送 /clear 密钥给主人
+        from commands.entertainment import deliver_initial_key
+        deliver_initial_key(self)
+
         try:
             self._run_loop()
         except KeyboardInterrupt:
@@ -152,7 +156,9 @@ class WeChatBot:
         self._message_count += 1
 
         # ---- 存入消息历史（供 /笑点解析 等命令使用）--------------
-        get_message_store().add(msg.chat_name, msg.sender, msg.content)
+        # 跳过 / 开头的命令消息
+        if not msg.content.startswith("/"):
+            get_message_store().add(msg.chat_name, msg.sender, msg.content)
 
         logger.debug(
             f"[{msg.msg_type}] {msg.chat_name!r} | "
@@ -240,6 +246,7 @@ class WeChatBot:
         if os.path.exists(mute_file):
             logger.info(f"[确认-步骤A] 已静音，直接发送 -> {chat_name!r}")
             self.client.send_message(chat_name, text)
+            get_message_store().add(chat_name, "bot", text)
             return
 
         script = os.path.join(
@@ -280,6 +287,8 @@ class WeChatBot:
             logger.info(f"[确认-步骤D] 发送 (result={result!r})")
 
         self.client.send_message(chat_name, text)
+        # 将 bot 的回复也存入消息历史（笑点解析需要）
+        get_message_store().add(chat_name, "bot", text)
         logger.info(f"[确认-步骤E] send_message 调用完成 -> {chat_name!r}")
 
     # ------------------------------------------------------------------

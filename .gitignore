@@ -1,8 +1,9 @@
 # Logs
 *.log
 
-# Message history (may contain sensitive chat data)
+# Message history & chat context (may contain sensitive data)
 message_history.jsonl
+chat_history.json
 
 # Python cache
 __pycache__/
@@ -14,6 +15,9 @@ config.local.json
 
 # Silent confirm flag
 .no_confirm
+
+# Clear key secret
+.clear_key
 
 # IDE
 .idea/

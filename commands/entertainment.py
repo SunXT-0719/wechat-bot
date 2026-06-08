@@ -7,7 +7,10 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import os
+import secrets
 from collections import defaultdict
 
 from bot.command_handler import CommandContext, get_registry
@@ -19,9 +22,79 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # 对话上下文（按群聊独立，仅记录 /chat 的对话，与笑点解析无关）
 # ---------------------------------------------------------------------------
-# 每个群聊保留最近 N 轮对话
 _MAX_CHAT_HISTORY = 20
+_HISTORY_FILE = os.path.join(os.path.dirname(__file__), "..", "chat_history.json")
 _chat_histories: dict[str, list[dict[str, str]]] = defaultdict(list)
+
+
+# ---------------------------------------------------------------------------
+# 清空密钥管理（每次使用后重置，私发给 SXTdeideidei）
+# ---------------------------------------------------------------------------
+_KEY_FILE = os.path.join(os.path.dirname(__file__), "..", ".clear_key")
+_KEY_OWNER = "SXTdeideidei"
+
+
+def _get_or_create_key() -> str:
+    """读取或生成清空密钥。"""
+    if os.path.exists(_KEY_FILE):
+        try:
+            with open(_KEY_FILE, "r", encoding="utf-8") as f:
+                return f.read().strip()
+        except Exception:
+            pass
+    key = f"{secrets.randbelow(10000):04d}"
+    with open(_KEY_FILE, "w", encoding="utf-8") as f:
+        f.write(key)
+    return key
+
+
+def deliver_initial_key(bot) -> None:
+    """首次启动时，将清空密钥私发给主人。"""
+    # 仅在密钥文件不存在时（首次）发送
+    if os.path.exists(_KEY_FILE):
+        return
+    key = _get_or_create_key()
+    try:
+        bot.client.send_message(
+            _KEY_OWNER,
+            f"🔑 /clear 初始密钥: {key}\n"
+            f"使用 /clear {key} 可清空当前群的 chat 上下文。\n"
+            f"密钥每次使用后会重置并重新发送。",
+        )
+        logger.info(f"初始密钥已发送给 {_KEY_OWNER}")
+    except Exception:
+        logger.exception("发送初始密钥失败")
+
+
+def _reset_key() -> str:
+    """生成新密钥并保存。"""
+    key = f"{secrets.randbelow(10000):04d}"
+    with open(_KEY_FILE, "w", encoding="utf-8") as f:
+        f.write(key)
+    return key
+
+
+def _load_chat_histories() -> None:
+    """从文件恢复对话上下文。"""
+    if not os.path.exists(_HISTORY_FILE):
+        return
+    try:
+        with open(_HISTORY_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        for chat_id, msgs in data.items():
+            _chat_histories[chat_id] = msgs[-_MAX_CHAT_HISTORY * 2:]
+        logger.info(f"加载对话上下文: {len(_chat_histories)} 个群聊")
+    except Exception:
+        pass
+
+
+def _save_chat_histories() -> None:
+    """持久化对话上下文到文件。"""
+    try:
+        with open(_HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(dict(_chat_histories), f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
 
 
 def _chat_system_prompt() -> str:
@@ -32,14 +105,53 @@ def _chat_system_prompt() -> str:
         "\n"
         "说话风格：\n"
         "- 自然直接，有问必答。\n"
-        "- 不要用\"作为AI\"\"我无法回答\"之类的话术回避问题。"
+        "- 不要用\"作为AI\"\"我无法回答\"之类的话术回避问题。\n"
+        "- 不要使用 Markdown 格式（**粗体**、## 标题等），纯文本即可。"
     )
 
 
 def _register() -> None:
+    # 恢复上次的聊天上下文
+    _load_chat_histories()
+
     r = get_registry()
     if r is None:
         return
+
+    # ---- /clear --------------------------------------------------------
+    @r.register(
+        "clear",
+        description="清空当前群的 chat 上下文（需密钥）",
+        usage="/clear <密钥>",
+    )
+    def cmd_clear(args: list[str], ctx: CommandContext) -> str | None:
+        if not args:
+            return "用法: /clear <密钥>"
+
+        user_key = args[0]
+        stored_key = _get_or_create_key()
+
+        if user_key != stored_key:
+            logger.info(f"[clear] 密钥错误: {ctx.sender} 输入 {user_key!r}")
+            return "❌ 密钥错误"
+
+        # 清空当前群的上下文
+        chat_id = ctx.chat_name
+        if chat_id in _chat_histories:
+            del _chat_histories[chat_id]
+            _save_chat_histories()
+
+        # 生成新密钥并发送给主人
+        new_key = _reset_key()
+        bot = ctx.extra.get("bot")
+        if bot is not None:
+            bot.client.send_message(
+                _KEY_OWNER,
+                f"🔑 /clear 新密钥: {new_key}",
+            )
+
+        logger.info(f"[clear] {ctx.sender} 清空了 {chat_id!r} 的上下文，新密钥已发送")
+        return f"✅ 上下文已清空，新密钥已发送给 {_KEY_OWNER}"
 
     # ---- /chat --------------------------------------------------------
     @r.register(
@@ -78,13 +190,16 @@ def _register() -> None:
                 + search_web(user_msg)
             )
 
+        # 在消息前加上发送者名字
+        user_msg_with_sender = f"{ctx.sender}: {user_msg}"
+
         # 构建消息列表（system + history + 当前消息）
         messages: list[dict[str, str]] = [
             {"role": "system", "content": _chat_system_prompt()},
         ]
         history = _chat_histories[chat_id]
         messages.extend(history[-_MAX_CHAT_HISTORY * 2:])
-        messages.append({"role": "user", "content": user_msg + search_context})
+        messages.append({"role": "user", "content": user_msg_with_sender + search_context})
 
         logger.info(
             f"[chat] {ctx.sender}@{chat_id}: {user_msg[:80]} "
@@ -103,12 +218,12 @@ def _register() -> None:
         if result is None:
             return "❌ AI 调用失败，请稍后重试"
 
-        # 保存上下文
-        history.append({"role": "user", "content": user_msg})
+        # 保存上下文（带上发送者名字）
+        history.append({"role": "user", "content": user_msg_with_sender})
         history.append({"role": "assistant", "content": result})
-        # 裁剪
         if len(history) > _MAX_CHAT_HISTORY * 2:
             _chat_histories[chat_id] = history[-_MAX_CHAT_HISTORY * 2:]
+        _save_chat_histories()
 
         return result
 

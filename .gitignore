@@ -10,8 +10,8 @@ __pycache__/
 *.pyc
 *.pyo
 
-# Config with real API keys (copy config.json to config.local.json for local use)
-config.local.json
+# Local config with real API keys (not tracked)
+config.json
 
 # Silent confirm flag
 .no_confirm

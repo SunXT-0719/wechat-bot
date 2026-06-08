@@ -76,32 +76,6 @@ def call_deepseek(
         return None
 
 
-# ---------------------------------------------------------------------------
-# Web search (DuckDuckGo, free, no API key)
-# ---------------------------------------------------------------------------
-
-def search_web(query: str, max_results: int = 5) -> str:
-    """Search DuckDuckGo and return formatted results."""
-    try:
-        from ddgs import DDGS  # type: ignore[import-untyped]
-
-        results = []
-        with DDGS() as ddgs:
-            for r in ddgs.text(query, max_results=max_results):
-                title = r.get("title", "")
-                body = r.get("body", "")
-                href = r.get("href", "")
-                results.append(f"- {title}\n  {body}\n  {href}")
-
-        if not results:
-            return "(未找到搜索结果)"
-
-        return "\n\n".join(results)
-    except ImportError:
-        return "(搜索不可用：缺少 ddgs 包，请运行 pip install ddgs)"
-    except Exception:
-        logger.exception("网页搜索失败")
-        return "(搜索失败)"
 
 
 def call_deepseek_messages(
@@ -155,29 +129,3 @@ def call_deepseek_messages(
         return None
 
 
-# ---------------------------------------------------------------------------
-# Web search (DuckDuckGo, free, no API key)
-# ---------------------------------------------------------------------------
-
-def search_web(query: str, max_results: int = 5) -> str:
-    """Search DuckDuckGo and return formatted results."""
-    try:
-        from ddgs import DDGS  # type: ignore[import-untyped]
-
-        results = []
-        with DDGS() as ddgs:
-            for r in ddgs.text(query, max_results=max_results):
-                title = r.get("title", "")
-                body = r.get("body", "")
-                href = r.get("href", "")
-                results.append(f"- {title}\n  {body}\n  {href}")
-
-        if not results:
-            return "(未找到搜索结果)"
-
-        return "\n\n".join(results)
-    except ImportError:
-        return "(搜索不可用：缺少 ddgs 包，请运行 pip install ddgs)"
-    except Exception:
-        logger.exception("网页搜索失败")
-        return "(搜索失败)"

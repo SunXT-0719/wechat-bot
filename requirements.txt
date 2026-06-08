@@ -13,5 +13,3 @@ requests>=2.31.0
 # Windows API (for wxauto backend)
 pywin32
 
-# Web search (for /chat -s)
-ddgs

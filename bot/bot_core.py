@@ -215,6 +215,9 @@ class WeChatBot:
 
     def _handle_command(self, msg: Message, parsed: ParsedCommand) -> None:
         """Dispatch a parsed command and send back the reply."""
+        from bot.i18n import set_chat_context
+        set_chat_context(msg.chat_name)
+
         ctx = CommandContext(
             chat_name=msg.chat_name,
             sender=msg.sender,
@@ -231,65 +234,8 @@ class WeChatBot:
         reply_text = self.commands.dispatch(parsed, ctx)
 
         if reply_text is not None:
-            self._confirm_and_send(msg.chat_name, str(reply_text))
-
-    def _confirm_and_send(self, chat_name: str, text: str) -> None:
-        """Run confirmation popup as subprocess, then send or pause."""
-        import os
-        import subprocess
-        import sys
-
-        # 如果已静音，直接发送
-        mute_file = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)), ".no_confirm"
-        )
-        if os.path.exists(mute_file):
-            logger.info(f"[确认-步骤A] 已静音，直接发送 -> {chat_name!r}")
-            self.client.send_message(chat_name, text)
-            get_message_store().add(chat_name, "bot", text)
-            return
-
-        script = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            "bot", "send_confirm.py",
-        )
-
-        logger.info(f"[确认-步骤B] 启动弹窗子进程 -> {chat_name!r}")
-        logger.info(f"[确认-步骤B] 脚本: {script}")
-
-        # 只传群名，不传文本（避免特殊字符破坏命令行参数）
-        try:
-            proc = subprocess.run(
-                [sys.executable, script, chat_name],
-                capture_output=True, text=True, timeout=600,
-                creationflags=subprocess.CREATE_NO_WINDOW
-                if sys.platform == "win32" else 0,
-            )
-            result = proc.stdout.strip()
-            logger.info(
-                f"[确认-步骤C] 子进程返回: stdout={result!r} "
-                f"stderr={proc.stderr[:200] if proc.stderr else ''!r} "
-                f"rc={proc.returncode}"
-            )
-        except subprocess.TimeoutExpired:
-            logger.error("[确认-步骤C] 子进程超时！")
-            result = "send"
-        except Exception:
-            logger.exception("[确认-步骤C] 子进程异常")
-            result = "send"
-
-        if result == "mute":
-            open(mute_file, "w").close()
-            logger.info("[确认-步骤D] 用户关闭确认，发送")
-        elif result == "pause":
-            logger.info("[确认-步骤D] 用户挂起，直接发送")
-        else:
-            logger.info(f"[确认-步骤D] 发送 (result={result!r})")
-
-        self.client.send_message(chat_name, text)
-        # 将 bot 的回复也存入消息历史（笑点解析需要）
-        get_message_store().add(chat_name, "bot", text)
-        logger.info(f"[确认-步骤E] send_message 调用完成 -> {chat_name!r}")
+            self.client.send_message(msg.chat_name, str(reply_text))
+            get_message_store().add(msg.chat_name, "bot", str(reply_text))
 
     # ------------------------------------------------------------------
     # Helpers

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import signal
+import threading
 import time
 from typing import Any
 
@@ -72,6 +73,36 @@ class WeChatBot:
         signal.signal(signal.SIGINT, self._on_sigint)
         signal.signal(signal.SIGTERM, self._on_sigint)
 
+        self._on_startup()
+
+        try:
+            self._run_loop()
+        except KeyboardInterrupt:
+            logger.info("收到中断信号（KeyboardInterrupt）")
+        finally:
+            self._shutdown()
+
+    def start_async(self) -> None:
+        """Start the bot's polling loop in a daemon thread (non-blocking).
+
+        Use this when the main thread needs to stay free (e.g. for a web panel).
+        Call ``stop()`` to shut down gracefully.
+        """
+        if self._running:
+            logger.warning("Bot 已在运行中")
+            return
+
+        self._running = True
+        self._start_time = time.time()
+
+        self._on_startup()
+
+        thread = threading.Thread(target=self._run_async, daemon=True)
+        thread.start()
+        logger.info("Bot 已在新线程中启动")
+
+    def _on_startup(self) -> None:
+        """Shared startup tasks (logging, key delivery)."""
         logger.info("=" * 50)
         logger.info("🤖 微信机器人启动")
         logger.info(f"   命令前缀: {self.config.command_prefix}")
@@ -83,10 +114,12 @@ class WeChatBot:
         from commands.entertainment import deliver_initial_key
         deliver_initial_key(self)
 
+    def _run_async(self) -> None:
+        """Wrapper that runs the main loop in a thread and handles shutdown."""
         try:
             self._run_loop()
-        except KeyboardInterrupt:
-            logger.info("收到中断信号（KeyboardInterrupt）")
+        except Exception:
+            logger.exception("Bot 线程异常退出")
         finally:
             self._shutdown()
 

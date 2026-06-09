@@ -18,7 +18,9 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import signal
 import sys
+import threading
 
 # 确保项目根目录在 sys.path 中，以便 "import bot" 和 "import commands" 工作
 _PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -66,6 +68,11 @@ def main() -> None:
         default=None,
         help="配置文件路径 (默认: config.json)",
     )
+    parser.add_argument(
+        "--no-panel",
+        action="store_true",
+        help="禁用 Web 控制面板（即使配置中启用了）",
+    )
     args = parser.parse_args()
 
     # ---- 先加载配置以便设置日志 ----------------------------------------
@@ -84,9 +91,41 @@ def main() -> None:
 
     bot = WeChatBot(config_path=args.config)
 
+    # ---- Web 控制面板 -------------------------------------------------
+    panel = None
+    if config.web_panel_enabled and not args.no_panel:
+        from bot.web_panel import WebControlPanel
+        panel = WebControlPanel(bot, port=config.web_panel_port)
+        panel.start()
+        logger.info(f"🌐 Web 控制面板: http://127.0.0.1:{config.web_panel_port}")
+
     logger.info(f"后端: {config.backend}")
     logger.info("正在启动微信机器人...")
-    bot.start()
+
+    if panel and config.web_panel_auto_start:
+        # 有 Web 面板且配置了自动启动：在后台线程启动 bot
+        logger.info("Web 面板模式：机器人在后台启动")
+        bot.start_async()
+
+        # 主线程等待 Ctrl+C，保持 Web 面板活跃
+        stop_event = threading.Event()
+        signal.signal(signal.SIGINT, lambda sig, frame: stop_event.set())
+        signal.signal(signal.SIGTERM, lambda sig, frame: stop_event.set())
+
+        logger.info("按 Ctrl+C 停止...")
+        try:
+            while not stop_event.is_set():
+                stop_event.wait(1)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            logger.info("正在关闭...")
+            bot.stop()
+            if panel:
+                panel.stop()
+    else:
+        # 传统模式：bot 在主线程阻塞运行
+        bot.start()
 
 
 def _check_environment(config) -> None:

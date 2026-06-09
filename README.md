@@ -24,7 +24,10 @@ wechat-bot/
 │   ├── wechat_client_weflow.py # WeFlow 后端（推荐，支持任意微信版本）
 │   ├── deepseek_client.py      # DeepSeek API 封装
 │   ├── message_store.py        # 消息历史持久化（JSONL 文件）
-│   └── send_confirm.py         # 发送确认弹窗（tkinter 子进程）
+│   ├── web_panel.py            # Web 控制面板（HTTP API + 可视化仪表盘）
+│   ├── i18n.py                 # 三语 i18n 文案
+│   ├── language.py             # 按群语言模式管理
+│   └── roleplay.py             # 角色扮演套件管理
 ├── commands/
 │   ├── basic.py                # 基础命令：/ping /help /status /echo /time /stop
 │   └── entertainment.py        # AI 命令：/笑点解析 /chat
@@ -114,6 +117,41 @@ start_bot.bat
 ```
 
 启动后会在屏幕上弹出一个终端窗口，bot 在后台运行。按 `Ctrl+C` 停止。
+
+---
+
+## Web 控制面板
+
+启动机器人后，打开浏览器访问 **http://127.0.0.1:8765** 即可进入可视化控制面板。
+
+### 功能
+
+| 功能 | 说明 |
+|------|------|
+| 🤖 机器人控制 | 启动 / 停止机器人，查看运行状态 |
+| 📊 运行统计 | 运行时间、处理消息数、已注册命令数 |
+| 🔑 密钥管理 | 查看当前清空密钥、一键重置 |
+| 🎭 角色扮演管理 | 创建/编辑/删除套件，为群聊分配角色扮演 |
+
+### 配置
+
+在 `config.json` 中配置：
+
+```json
+{
+    "web_panel_enabled": true,
+    "web_panel_port": 8765,
+    "web_panel_auto_start": true
+}
+```
+
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `web_panel_enabled` | `true` | 是否启用 Web 控制面板 |
+| `web_panel_port` | `8765` | 控制面板端口 |
+| `web_panel_auto_start` | `true` | 启动面板后自动运行机器人 |
+
+禁用面板：`python main.py --no-panel`
 
 ---
 

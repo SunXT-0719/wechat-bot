@@ -108,6 +108,19 @@ class BotConfig:
     # ------------------------------------------------------------------
 
     @property
+    def web_panel_enabled(self) -> bool:
+        return self._data.get("web_panel_enabled", True)
+
+    @property
+    def web_panel_port(self) -> int:
+        return self._data.get("web_panel_port", 8765)
+
+    @property
+    def web_panel_auto_start(self) -> bool:
+        """Auto-start the bot when the web panel launches (default: true)."""
+        return self._data.get("web_panel_auto_start", True)
+
+    @property
     def deepseek_api_key(self) -> str:
         return self._data.get("deepseek_api_key", "")
 

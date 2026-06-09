@@ -21,6 +21,11 @@
     "log_file": "bot.log",
     "log_level": "DEBUG",
 
+    "web_panel_enabled": true,
+    "web_panel_port": 8765,
+    "web_panel_auto_start": true,
+    "web_panel_comment": "Web 控制面板。enabled: 是否启用；port: 端口；auto_start: 启动面板后自动运行 bot",
+
     "deepseek_api_key": "你的DeepSeek_API_Key",
     "deepseek_model": "deepseek-v4-flash",
     "deepseek_base_url": "https://api.deepseek.com/v1/chat/completions"

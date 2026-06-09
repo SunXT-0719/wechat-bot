@@ -106,6 +106,19 @@ def _register_all() -> None:
             return t("stop_ok")
         return t("stop_fail")
 
+    # ---- /update-log -------------------------------------------------
+    @r.register("update-log", description="查看更新日志 / changelog")
+    def cmd_update_log(args: list[str], ctx: CommandContext) -> str:
+        import os
+        changelog = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), "CHANGELOG.md"
+        )
+        try:
+            with open(changelog, "r", encoding="utf-8") as f:
+                return f.read().strip()
+        except Exception:
+            return "❌ 无法读取更新日志"
+
     # ---- /language ---------------------------------------------------
     @r.register(
         "language",

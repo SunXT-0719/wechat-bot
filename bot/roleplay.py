@@ -46,6 +46,29 @@ def clear_selection(chat_id: str) -> None:
     _save()
 
 
+def delete(name: str) -> bool:
+    """Delete a roleplay from the catalog. Returns True if it existed."""
+    if name not in _catalog:
+        return False
+    del _catalog[name]
+    # Also clear any chat that was using this roleplay
+    for chat_id, rp_name in list(_selections.items()):
+        if rp_name == name:
+            del _selections[chat_id]
+    _save()
+    return True
+
+
+def get_selections() -> dict[str, str]:
+    """Return a copy of {chat_id: roleplay_name}."""
+    return dict(_selections)
+
+
+def get_catalog() -> dict[str, str]:
+    """Return a copy of the full roleplay catalog {name: prompt}."""
+    return dict(_catalog)
+
+
 def _save() -> None:
     try:
         with open(_FILE, "w", encoding="utf-8") as f:

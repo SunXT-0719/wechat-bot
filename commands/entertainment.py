@@ -109,7 +109,7 @@ def _chat_system_prompt(chat_id: str = "") -> str:
             "\n"
             "---\n"
             "\n"
-            + rp + "\n"
+            + rp_text + "\n"
             "\n"
             "---\n"
             "\n"
@@ -153,7 +153,7 @@ def _register() -> None:
     @r.register(
         "clear",
         description="清空当前群的 chat 上下文（需密钥）",
-        usage="/clear <4位数字密钥>",
+        usage="/clear <密钥(4位数字)>",
     )
     def cmd_clear(args: list[str], ctx: CommandContext) -> str | None:
         if not args:
@@ -230,15 +230,16 @@ def _register() -> None:
                 return t("rp_list_empty")
             return t("rp_list") + "\n" + "\n".join(f"  - {n}" for n in names)
 
-        # -new <name> <content>
-        if sub == "-new":
+        # -new/-edit <name> <content>
+        if sub in ("-new", "-edit"):
             if len(args) < 3:
                 return t("rp_new_usage")
             name = args[1]
             prompt = " ".join(args[2:])
             rp.create(name, prompt)
-            rp.set_selection(chat_id, name)
-            return t("rp_new_ok", name=name)
+            if sub == "-new":
+                rp.set_selection(chat_id, name)
+            return t("rp_new_ok" if sub == "-new" else "rp_edit_ok", name=name)
 
         # -set <name>
         if sub == "-set":
@@ -274,8 +275,11 @@ def _register() -> None:
         if bot is None:
             return t("chat_bot_error")
 
-        # 在消息前加上发送者名字
+        # 在消息前加上发送者名字，并追加语言指令（每次对话都带）
+        lang_instr = lang_prompt_instr(chat_id)
         user_msg_with_sender = f"{ctx.sender}: {user_msg}"
+        if lang_instr:
+            user_msg_with_sender += f"\n\n（{lang_instr}）"
 
         # 构建消息列表（system + history + 当前消息）
         messages: list[dict[str, str]] = [

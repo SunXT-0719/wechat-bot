@@ -275,16 +275,18 @@ _T = {
     },
     "rp_new_ok": {
         "zh": "✅ 已创建角色扮演套件「{name}」并设为当前群使用",
-        "en": "✅ Created roleplay set "{name}" and applied to this chat",
+        "en": "✅ Created roleplay set [{name}] and applied to this chat",
         "jp": "✅ ロールプレイ「{name}」を作成し、このグループに適用しました",
     },
+    "rp_edit_ok": {
+        "zh": "✅ 已更新角色扮演套件「{name}」（未切换当前群选择）",
+        "en": "✅ Updated roleplay set [{name}] (current chat not changed)",
+        "jp": "✅ ロールプレイ「{name}」を更新しました（現在のグループは変更なし）",
+    },
     "rp_set_usage": {
-        "zh": "用法: /roleplay -set <名称>
-先用 /roleplay -list 查看可用套件",
-        "en": "Usage: /roleplay -set <name>
-Use /roleplay -list to see available sets",
-        "jp": "使い方: /roleplay -set <名前>
-/roleplay -list で利用可能なセットを表示",
+        "zh": "用法: /roleplay -set <名称>\n先用 /roleplay -list 查看可用套件",
+        "en": "Usage: /roleplay -set <name>\nUse /roleplay -list to see available sets",
+        "jp": "使い方: /roleplay -set <名前>\n/roleplay -list で利用可能なセットを表示",
     },
     "rp_clear_ok": {
         "zh": "✅ 角色扮演已清除，恢复默认 chat 模式",

@@ -1,17 +1,11 @@
 """
-内置基础命令
------------
-这些命令在 bot 启动时通过 ``@register`` 装饰器自动注册，
-无需手动导入——``discover_commands()`` 会扫描 ``commands/`` 包。
-
-添加新命令：
-    在本目录下新建任意 ``.py`` 文件，使用 ``get_registry().register(...)``
-    装饰器即可，bot 会在下次启动时自动发现并加载。
+内置基础命令 — 支持中/Eng/日三种语言。
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import platform
 import time
 
@@ -20,63 +14,57 @@ from bot.command_handler import (
     CommandRegistry,
     get_registry,
 )
+from bot.i18n import t
+from bot.language import get_name as lang_name_for, set_language
 
 logger = logging.getLogger(__name__)
 
 # ===================================================================
-# 命令注册（模块导入时自动执行）
+# 命令注册
 # ===================================================================
 
 
 def _register_all() -> None:
-    """将所有命令注册到全局 registry。"""
     r = get_registry()
     if r is None:
-        logger.warning(
-            "CommandRegistry 尚未设置，basic 命令将不会注册。"
-            "请确保 set_registry() 在 discover_commands() 之前被调用。"
-        )
+        logger.warning("CommandRegistry 尚未设置")
         return
 
     # ---- /ping -------------------------------------------------------
-    @r.register("ping", description="测试机器人是否在线")
+    @r.register("ping", description="Test if bot is online / 测试在线")
     def cmd_ping(args: list[str], ctx: CommandContext) -> str:
-        """健康检查命令。"""
-        return "🏓 pong!"
+        return t("pong")
 
     # ---- /help -------------------------------------------------------
-    @r.register("help", description="显示所有可用命令", usage="/help [命令名]")
+    @r.register("help", description="Show commands / 显示命令", usage="/help [cmd]")
     def cmd_help(args: list[str], ctx: CommandContext) -> str:
-        """列出所有命令或显示某个命令的详细信息。"""
         if args:
             cmd_name = args[0].lower()
             info = r.get_command_info(cmd_name)
             if info is None:
-                prefix = r.prefix
-                return f"❓ 未找到命令: {prefix}{cmd_name}"
+                return t("help_not_found", cmd=f"{r.prefix}{cmd_name}")
             lines = [
                 f"📋 {r.prefix}{cmd_name}",
-                f"   描述: {info['description'] or '(无)'}",
-                f"   用法: {info['usage']}",
+                t("help_desc_fmt", desc=info["description"] or t("help_no_desc")),
+                t("help_usage_fmt", usage=info["usage"]),
             ]
             return "\n".join(lines)
 
         prefix = r.prefix
-        lines = ["📋 可用命令:", ""]
+        lines = [t("help_header"), ""]
         for name, info in sorted(r.commands.items()):
-            desc = info["description"] or "(无描述)"
+            desc = info["description"] or t("help_no_desc_item")
             lines.append(f"  {prefix}{name:<16} — {desc}")
         lines.append("")
-        lines.append(f"输入 {prefix}help <命令名> 查看命令详细用法")
+        lines.append(t("help_footer", cmd=prefix))
         return "\n".join(lines)
 
     # ---- /status -----------------------------------------------------
-    @r.register("status", description="查看机器人运行状态")
+    @r.register("status", description="Bot status / 运行状态")
     def cmd_status(args: list[str], ctx: CommandContext) -> str:
-        """显示机器人当前状态。"""
         bot = ctx.extra.get("bot")
         if bot is None:
-            return "⚠️ 无法获取机器人状态（bot 引用不可用）"
+            return "⚠️ Cannot get bot status"
 
         uptime = bot.uptime_seconds
         h, remainder = divmod(int(uptime), 3600)
@@ -84,58 +72,93 @@ def _register_all() -> None:
         uptime_str = f"{h:02d}:{m:02d}:{s:02d}"
 
         lines = [
-            "📊 机器人状态",
-            f"   运行时间: {uptime_str}",
-            f"   处理消息: {bot.message_count} 条",
-            f"   已注册命令: {len(r.commands)} 个",
-            f"   系统: {platform.platform()}",
-            f"   Python: {platform.python_version()}",
+            t("status_header"),
+            t("status_uptime", uptime=uptime_str),
+            t("status_msgs", count=bot.message_count),
+            t("status_cmds", count=len(r.commands)),
+            t("status_lang", lang=lang_name_for(ctx.chat_name)),
+            t("status_sys", sys=platform.platform()),
+            t("status_py", py=platform.python_version()),
         ]
         return "\n".join(lines)
 
     # ---- /echo -------------------------------------------------------
-    @r.register("echo", description="回显消息（用于测试）", usage="/echo <消息>")
+    @r.register("echo", description="Echo / 回显", usage="/echo <msg>")
     def cmd_echo(args: list[str], ctx: CommandContext) -> str:
-        """原样返回参数内容。"""
         if not args:
-            return "用法: /echo <消息内容>"
-        return "🔊 " + " ".join(args)
+            return t("echo_usage")
+        return t("echo_prefix") + " ".join(args)
 
     # ---- /time -------------------------------------------------------
-    @r.register("time", description="显示当前时间")
+    @r.register("time", description="Show time / 显示时间")
     def cmd_time(args: list[str], ctx: CommandContext) -> str:
-        """返回服务器当前时间。"""
         now = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-        return f"🕐 当前时间: {now}"
+        return t("time_prefix") + now
 
-    # ---- /stop (仅用于开发调试) --------------------------------------
-    @r.register("stop", description="停止机器人（需确认）", usage="/stop [confirm]")
+    # ---- /stop -------------------------------------------------------
+    @r.register("stop", description="Stop bot / 停止", usage="/stop [confirm]")
     def cmd_stop(args: list[str], ctx: CommandContext) -> str:
-        """带确认的停止命令。"""
         if not args or args[0].lower() != "confirm":
-            return "⚠️ 确定要停止机器人吗？输入 /stop confirm 确认。"
+            return t("stop_confirm")
         bot = ctx.extra.get("bot")
         if bot is not None:
             bot.stop()
-            return "👋 机器人正在停止..."
-        return "⚠️ 无法停止（bot 引用不可用）"
+            return t("stop_ok")
+        return t("stop_fail")
 
-    # ---- /confirm-on ---------------------------------------------------
-    @r.register("confirm-on", description="重新开启发送确认弹窗")
-    def cmd_confirm_on(args: list[str], ctx: CommandContext) -> str:
-        """删除静音标记文件，恢复发送前弹窗。"""
+    # ---- /update-log -------------------------------------------------
+    @r.register("update-log", description="查看更新日志 / changelog")
+    def cmd_update_log(args: list[str], ctx: CommandContext) -> str:
         import os
-
-        mute_file = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)), ".no_confirm"
+        changelog = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), "CHANGELOG.md"
         )
-        if os.path.exists(mute_file):
-            os.remove(mute_file)
-            return "✅ 发送确认弹窗已重新开启"
-        return "ℹ️ 发送确认弹窗本来就是开启的"
+        try:
+            with open(changelog, "r", encoding="utf-8") as f:
+                return f.read().strip()
+        except Exception:
+            return "❌ 无法读取更新日志"
+
+    # ---- /language ---------------------------------------------------
+    @r.register(
+        "language",
+        description="Switch language / 切换语言",
+        usage="/language <中/Eng/日>",
+    )
+    def cmd_language(args: list[str], ctx: CommandContext) -> str:
+        if not args:
+            return t("lang_usage")
+
+        lang_input = args[0]
+        lang_map = {
+            "中": "zh", "zh": "zh", "cn": "zh", "中文": "zh",
+            "eng": "en", "en": "en", "英": "en", "英语": "en", "英文": "en",
+            "日": "jp", "jp": "jp", "ja": "jp", "日语": "jp", "日本語": "jp",
+        }
+        lang_code = lang_map.get(lang_input.lower())
+
+        if lang_code is None:
+            return t("lang_unknown", lang=lang_input)
+
+        # 切换语言 + 注入强制指令
+        set_language(ctx.chat_name, lang_code)
+        from commands.entertainment import _chat_histories, _save_chat_histories
+        lang_name_map = {"zh": "简体中文", "en": "English", "jp": "日本語"}
+        new_lang = lang_name_map[lang_code]
+        _chat_histories[ctx.chat_name].append({
+            "role": "user",
+            "content": (
+                f"【系统指令 — 从现在开始，无视之前所有的语言设定，"
+                f"你的回复必须使用{new_lang}，即使用户用其他语言发消息，"
+                f"你也只能用{new_lang}回复。此指令优先级最高。】"
+            ),
+        })
+        _save_chat_histories()
+
+        lang_name = {"zh": "中文", "en": "English", "jp": "日本語"}[lang_code]
+        return t("lang_ok", lang=lang_name)
 
     logger.debug(f"basic 模块注册完成，共 {len(r.commands)} 个命令")
 
 
-# 模块导入时自动执行注册
 _register_all()

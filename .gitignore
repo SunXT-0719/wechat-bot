@@ -13,11 +13,15 @@ __pycache__/
 # Local config with real API keys (not tracked)
 config.json
 
-# Silent confirm flag
-.no_confirm
-
 # Clear key secret
 .clear_key
+
+# Language setting
+.language
+.language.json
+
+# Roleplay setting
+.roleplay.json
 
 # IDE
 .idea/

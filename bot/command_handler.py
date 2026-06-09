@@ -168,19 +168,19 @@ class CommandRegistry:
 
         entry = self._commands.get(cmd_name)
         if entry is None:
-            available = ", ".join(sorted(self._commands.keys())) or "(无)"
-            return (
-                f"❓ 未知命令: {self.prefix}{cmd_name}\n"
-                f"可用命令: {available}\n"
-                f"输入 {self.prefix}help 查看更多信息"
-            )
+            from bot.i18n import t, set_chat_context
+            set_chat_context(ctx.chat_name)
+            available = ", ".join(sorted(self._commands.keys())) or "(none)"
+            return t("unknown_cmd", cmd=f"{self.prefix}{cmd_name}", cmds=available)
 
         try:
             result = entry["func"](parsed.args, ctx)
             return result
         except Exception:
             logger.exception(f"命令 {self.prefix}{cmd_name} 执行出错")
-            return f"⚠️ 命令 {self.prefix}{cmd_name} 执行时发生内部错误，请检查日志。"
+            from bot.i18n import t, set_chat_context
+            set_chat_context(ctx.chat_name)
+            return t("cmd_error", cmd=f"{self.prefix}{cmd_name}")
 
     # ------------------------------------------------------------------
     # Introspection

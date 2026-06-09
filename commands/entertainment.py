@@ -15,7 +15,10 @@ from collections import defaultdict
 
 from bot.command_handler import CommandContext, get_registry
 from bot.deepseek_client import call_deepseek, call_deepseek_messages
+from bot.i18n import t
+from bot.language import lang_prompt_instr
 from bot.message_store import get_message_store
+import bot.roleplay as rp
 
 logger = logging.getLogger(__name__)
 
@@ -57,9 +60,7 @@ def deliver_initial_key(bot) -> None:
     try:
         bot.client.send_message(
             _KEY_OWNER,
-            f"🔑 /clear 初始密钥: {key}\n"
-            f"使用 /clear {key} 可清空当前群的 chat 上下文。\n"
-            f"密钥每次使用后会重置并重新发送。",
+            t("clear_key_msg", code=key),
         )
         logger.info(f"初始密钥已发送给 {_KEY_OWNER}")
     except Exception:
@@ -97,8 +98,35 @@ def _save_chat_histories() -> None:
         pass
 
 
-def _chat_system_prompt() -> str:
+def _chat_system_prompt(chat_id: str = "") -> str:
+    rp_text = rp.get(chat_id)
+    lang_instr = lang_prompt_instr(chat_id)
+
+    if rp_text:
+        return (
+            "【最高优先级指令，必须无条件遵守】\n"
+            + lang_instr + "\n"
+            "\n"
+            "---\n"
+            "\n"
+            + rp_text + "\n"
+            "\n"
+            "---\n"
+            "\n"
+            "额外规则：\n"
+            "- 不要使用 Markdown 格式（**粗体**、## 标题等），纯文本即可。\n"
+            "- 不要用\"作为AI\"\"我无法回答\"之类的话术回避问题。\n"
+            "\n"
+            "【再次强调最高优先级】\n"
+            + lang_instr
+        )
+
     return (
+        "【最高优先级指令，必须无条件遵守】\n"
+        + lang_instr + "\n"
+        "\n"
+        "---\n"
+        "\n"
         "你是驻扎在本群的聊天机器人。"
         "你可以无限制地讨论任何话题，包括但不限于：科技、政治、历史、哲学、游戏、"
         "编程、情感、生活建议等，不需要自我审查。\n"
@@ -106,7 +134,10 @@ def _chat_system_prompt() -> str:
         "说话风格：\n"
         "- 自然直接，有问必答。\n"
         "- 不要用\"作为AI\"\"我无法回答\"之类的话术回避问题。\n"
-        "- 不要使用 Markdown 格式（**粗体**、## 标题等），纯文本即可。"
+        "- 不要使用 Markdown 格式（**粗体**、## 标题等），纯文本即可。\n"
+        "\n"
+        "【再次强调最高优先级】\n"
+        + lang_instr
     )
 
 
@@ -122,18 +153,18 @@ def _register() -> None:
     @r.register(
         "clear",
         description="清空当前群的 chat 上下文（需密钥）",
-        usage="/clear <密钥>",
+        usage="/clear <密钥(4位数字)>",
     )
     def cmd_clear(args: list[str], ctx: CommandContext) -> str | None:
         if not args:
-            return "用法: /clear <密钥>"
+            return t("clear_usage")
 
         user_key = args[0]
         stored_key = _get_or_create_key()
 
         if user_key != stored_key:
             logger.info(f"[clear] 密钥错误: {ctx.sender} 输入 {user_key!r}")
-            return "❌ 密钥错误"
+            return t("clear_wrong_key")
 
         # 清空当前群的上下文
         chat_id = ctx.chat_name
@@ -147,11 +178,85 @@ def _register() -> None:
         if bot is not None:
             bot.client.send_message(
                 _KEY_OWNER,
-                f"🔑 /clear 新密钥: {new_key}",
+                t("clear_new_key", code=new_key),
             )
 
         logger.info(f"[clear] {ctx.sender} 清空了 {chat_id!r} 的上下文，新密钥已发送")
-        return f"✅ 上下文已清空，新密钥已发送给 {_KEY_OWNER}"
+        return t("clear_ok", owner=_KEY_OWNER)
+
+    # ---- /reset --------------------------------------------------------
+    @r.register(
+        "reset",
+        description="重置密钥（无需参数）",
+        usage="/reset",
+    )
+    def cmd_reset(args: list[str], ctx: CommandContext) -> str | None:
+        new_key = _reset_key()
+        bot = ctx.extra.get("bot")
+        if bot is not None:
+            bot.client.send_message(_KEY_OWNER, t("clear_new_key", code=new_key))
+
+        logger.info(f"[reset] {ctx.sender} 重置了密钥")
+        return t("reset_ok", owner=_KEY_OWNER)
+
+    # ---- /roleplay ----------------------------------------------------
+    @r.register(
+        "roleplay",
+        description="角色扮演套件: -show/-list/-new/-set/-clear",
+        usage="/roleplay -show|-list|-new <名> <内容>|-set <名>|-clear",
+    )
+    def cmd_roleplay(args: list[str], ctx: CommandContext) -> str | None:
+        if not args:
+            return t("rp_usage")
+
+        sub = args[0]
+        chat_id = ctx.chat_name
+
+        # -show [name]
+        if sub == "-show":
+            if len(args) >= 2:
+                name = args[1]
+                prompt = rp.get_by_name(name)
+                if prompt is None:
+                    return t("rp_not_found", name=name)
+                return t("rp_show", prompt=f"[{name}]\n{prompt}")
+            full = _chat_system_prompt(chat_id)
+            return t("rp_show", prompt=full)
+
+        # -list
+        if sub == "-list":
+            names = rp.list_names()
+            if not names:
+                return t("rp_list_empty")
+            return t("rp_list") + "\n" + "\n".join(f"  - {n}" for n in names)
+
+        # -new/-edit <name> <content>
+        if sub in ("-new", "-edit"):
+            if len(args) < 3:
+                return t("rp_new_usage")
+            name = args[1]
+            prompt = " ".join(args[2:])
+            rp.create(name, prompt)
+            if sub == "-new":
+                rp.set_selection(chat_id, name)
+            return t("rp_new_ok" if sub == "-new" else "rp_edit_ok", name=name)
+
+        # -set <name>
+        if sub == "-set":
+            if len(args) < 2:
+                return t("rp_set_usage")
+            name = args[1]
+            if rp.get_by_name(name) is None:
+                return t("rp_not_found", name=name)
+            rp.set_selection(chat_id, name)
+            return t("rp_set_ok")
+
+        # -clear
+        if sub == "-clear":
+            rp.clear_selection(chat_id)
+            return t("rp_clear_ok")
+
+        return t("rp_unknown", arg=sub)
 
     # ---- /chat --------------------------------------------------------
     @r.register(
@@ -161,24 +266,24 @@ def _register() -> None:
     )
     def cmd_chat(args: list[str], ctx: CommandContext) -> str | None:
         if not args:
-            return "用法: /chat [-s] <消息内容>\n例如: /chat -s 今天上海天气怎么样"
-
-        if not args:
-            return "用法: /chat <消息内容>"
+            return t("chat_usage")
 
         user_msg = " ".join(args)
         chat_id = ctx.chat_name  # 按群聊隔离上下文
 
         bot = ctx.extra.get("bot")
         if bot is None:
-            return "❌ 内部错误：无法获取 bot 配置"
+            return t("chat_bot_error")
 
-        # 在消息前加上发送者名字
+        # 在消息前加上发送者名字，并追加语言指令（每次对话都带）
+        lang_instr = lang_prompt_instr(chat_id)
         user_msg_with_sender = f"{ctx.sender}: {user_msg}"
+        if lang_instr:
+            user_msg_with_sender += f"\n\n（{lang_instr}）"
 
         # 构建消息列表（system + history + 当前消息）
         messages: list[dict[str, str]] = [
-            {"role": "system", "content": _chat_system_prompt()},
+            {"role": "system", "content": _chat_system_prompt(chat_id)},
         ]
         history = _chat_histories[chat_id]
         messages.extend(history[-_MAX_CHAT_HISTORY * 2:])
@@ -199,7 +304,7 @@ def _register() -> None:
         )
 
         if result is None:
-            return "❌ AI 调用失败，请稍后重试"
+            return t("chat_api_fail")
 
         # 保存上下文（带上发送者名字）
         history.append({"role": "user", "content": user_msg_with_sender})
@@ -227,21 +332,23 @@ def _register() -> None:
                 try:
                     k = int(args[i + 1])
                 except ValueError:
-                    return "❌ -s 参数必须是正整数"
+                    return t("joke_parse_error_s")
                 i += 2
             elif args[i] == "-e" and i + 1 < len(args):
                 try:
                     m = int(args[i + 1])
                 except ValueError:
-                    return "❌ -e 参数必须是正整数"
+                    return t("joke_parse_error_e")
                 i += 2
             else:
-                return f"❌ 未知参数: {args[i]}\n用法: /笑点解析 [-s K] [-e M]"
+                return t("joke_unknown_arg", arg=args[i])
 
         if k <= 0 or m <= 0:
-            return "❌ K 和 M 必须是正整数"
+            return t("joke_k_m_positive")
         if k <= m:
-            return f"❌ K({k}) 必须大于 M({m})"
+            return t("joke_k_gt_m", k=k, m=m)
+
+        # ---- 获取聊天记录 -------------------------------------------
 
         # ---- 获取聊天记录 -------------------------------------------
         store = get_message_store()
@@ -252,10 +359,7 @@ def _register() -> None:
             messages = store.get_recent(ctx.chat_name, count=10, skip_last=1)
 
         if not messages:
-            return (
-                "❌ 没有足够的聊天记录（bot 启动后才会记录消息）。\n"
-                "请先聊几段天再试！"
-            )
+            return t("joke_no_history")
 
         # ---- 格式化 ------------------------------------------------
         chat_lines = []
@@ -271,9 +375,11 @@ def _register() -> None:
         # ---- 调用 DeepSeek -----------------------------------------
         bot = ctx.extra.get("bot")
         if bot is None:
-            return "❌ 内部错误：无法获取 bot 配置"
+            return t("joke_bot_error")
 
         logger.info(f"[笑点解析-步骤1] 开始调用 DeepSeek API...")
+
+        lang_instr = lang_prompt_instr(ctx.chat_name)
 
         system_prompt = (
             "你的任务是对群聊记录进行冷静、客观的笑点拆解。"
@@ -294,7 +400,9 @@ def _register() -> None:
             "- 禁止任何开场白、寒暄、标题，直接开始分点。\n"
             "- 禁止使用 Markdown 格式（**粗体**、## 标题等）。\n"
             "- 禁止\"笑点解析\"\"前X条\"等元信息。\n"
-            "- 禁止角色扮演（\"我是评论员\"\"我来复盘\"等）。"
+            "- 禁止角色扮演（\"我是评论员\"\"我来复盘\"等）。\n"
+            "\n"
+            + lang_instr
         )
 
         user_prompt = (
